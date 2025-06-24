@@ -99,7 +99,7 @@ jobs:
         id: alias-update
         run: |
           cd valkey-container
-          python ../valkey-release-automation/scripts/update_container_aliases.py \
+          python ../valkey-release-automation/scripts/automate_alias_update.py \
             generate-stackbrew-library.sh \
             ${{ inputs.version }}
           git add generate-stackbrew-library.sh
