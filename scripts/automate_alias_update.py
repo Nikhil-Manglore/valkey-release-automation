@@ -1,7 +1,7 @@
 import sys
 import logging
 import re
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 
 logging.basicConfig(level=logging.ERROR, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -48,8 +48,17 @@ def parse_version(version: str) -> Tuple[int, int]:
         logging.error(f"Error parsing version {version}: {e}")
         raise
 
+def get_newest_version_key(aliases: Dict[str, str]) -> Optional[str]:
+    """Get the newest (highest) version key from aliases"""
+    if not aliases:
+        return None
+    
+    # Sort by version and return the highest
+    sorted_keys = sorted(aliases.keys(), key=parse_version)
+    return sorted_keys[-1]
+
 def update_aliases_dict(version: str, aliases: Dict[str, str]) -> Dict[str, str]:
-    """Update the aliases dictionary with the new version"""
+    """Update the aliases dictionary with the new version using simplified logic"""
     try:
         new_major, new_minor = parse_version(version)
         new_key = f"{new_major}.{new_minor}"
@@ -59,37 +68,40 @@ def update_aliases_dict(version: str, aliases: Dict[str, str]) -> Dict[str, str]
             print(f"Version {new_key} already exists in aliases - no update needed")
             return aliases
         
-        # Find current highest major version
-        existing_majors = [parse_version(k)[0] for k in aliases.keys()]
-        current_highest_major = max(existing_majors) if existing_majors else 0
+        # Get current newest version
+        current_newest = get_newest_version_key(aliases)
         
-        if new_major > current_highest_major:
-            # NEW MAJOR VERSION (e.g., 9.0 when current highest is 8.x)
-            print(f"Adding new major version {new_major}")
+        if not current_newest:
+            # No existing aliases - add the first one
+            print(f"Adding first version {new_key}")
+            aliases[new_key] = f"{new_major} latest"
+            return aliases
+        
+        curr_major, curr_minor = parse_version(current_newest)
+        
+        if new_major == curr_major and new_minor > curr_minor:
+            # Same major, newer minor - REPLACE IN-PLACE
+            print(f"Updating from {current_newest} to {new_key} (same major, newer minor)")
             
-            # Remove "latest" from previous highest major
-            for key in list(aliases.keys()):
-                if 'latest' in aliases[key]:
-                    aliases[key] = aliases[key].replace(' latest', '').strip()
+            # Get the old value and transfer it to new key
+            old_value = aliases[current_newest]
+            del aliases[current_newest]
+            aliases[new_key] = old_value
             
-            # Add new major version with "latest"
+        elif new_major > curr_major:
+            # New major version - ADD NEW, UPDATE LATEST
+            print(f"Adding new major version {new_major} (upgrading from major {curr_major})")
+            
+            # Remove 'latest' from current newest
+            if 'latest' in aliases[current_newest]:
+                aliases[current_newest] = aliases[current_newest].replace(' latest', '').strip()
+            
+            # Add new major version with 'latest'
             aliases[new_key] = f"{new_major} latest"
             
-        elif new_major == current_highest_major:
-            # NEW MINOR within current highest major (e.g., 8.2 when we have 8.1)
-            print(f"Updating to newer minor version {new_key} within major {new_major}")
-            
-            # Remove old minor versions for this major (keep other majors)
-            keys_to_remove = [k for k in aliases if parse_version(k)[0] == new_major]
-            for key in keys_to_remove:
-                del aliases[key]
-            
-            # Add new minor version with "latest" (if this is the highest major)
-            aliases[new_key] = f"{new_major} latest"
-        
         else:
-            # Lower major version - no changes needed
-            print(f"Version {new_key} is older than current highest major {current_highest_major} - no changes made")
+            # Lower or equal version - no changes needed
+            print(f"Version {new_key} is not newer than current newest {current_newest} - no changes made")
         
         return aliases
     
@@ -104,7 +116,7 @@ def update_container_aliases(script_path: str, version: str) -> None:
         aliases = parse_current_aliases(script_path)
         print(f"Current aliases: {aliases}")
         
-        # Update aliases
+        # Update aliases using simplified logic
         updated_aliases = update_aliases_dict(version, aliases)
         
         # Check if aliases actually changed
