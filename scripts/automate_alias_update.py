@@ -92,12 +92,20 @@ def update_aliases_dict(version: str, aliases: Dict[str, str]) -> Dict[str, str]
             # New major version - ADD NEW, UPDATE LATEST
             print(f"Adding new major version {new_major} (upgrading from major {curr_major})")
             
+            # DEBUG: Print before changes
+            print(f"BEFORE: {aliases}")
+            
             # Remove 'latest' from current newest
             if 'latest' in aliases[current_newest]:
                 aliases[current_newest] = aliases[current_newest].replace(' latest', '').strip()
+                print(f"UPDATED {current_newest}: '{aliases[current_newest]}'")
             
             # Add new major version with 'latest'
             aliases[new_key] = f"{new_major} latest"
+            print(f"ADDED {new_key}: '{aliases[new_key]}'")
+            
+            # DEBUG: Print after changes
+            print(f"AFTER: {aliases}")
             
         else:
             # Lower or equal version - no changes needed
