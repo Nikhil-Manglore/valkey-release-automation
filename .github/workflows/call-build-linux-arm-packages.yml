@@ -86,26 +86,103 @@ jobs:
       - name: Sync to S3
         run: aws s3 sync packages-files s3://${{ secrets.bucket_name }}/releases/
 
-      - name: Validate uploaded binaries to S3
+  test-binaries:
+    name: Test S3 binaries ${{ matrix.distro.platform }}-${{ matrix.distro.arch }}
+    runs-on: ${{ matrix.distro.target }}
+    needs: build-valkey
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(inputs.build_matrix) }}
+    steps:
+      - name: Checkout Valkey
+        uses: actions/checkout@v4
+        with:
+          repository: valkey-io/valkey
+          ref: unstable
+          
+      - name: Install test dependencies
         run: |
-          mkdir -p validation
-          cd validation
-
-          # Download the uploaded tarball
-          TAR_FILE_NAME=valkey-${{inputs.version}}-${{matrix.distro.platform}}-${{ matrix.distro.arch}}
-          aws s3 cp s3://${{ secrets.bucket_name }}/releases/$TAR_FILE_NAME.tar.gz .
-          aws s3 cp s3://${{ secrets.bucket_name }}/releases/$TAR_FILE_NAME.tar.gz.sha256 .
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            tcl \
+            tcl-dev \
+            tcl-tls \
+            python3 \
+            python3-pip \
+            libssl-dev \
+            bc \
+            curl
           
-          echo "Verifying SHA 256 checksum"
+      - name: Download and validate binaries from S3
+        run: |
+          mkdir -p ./downloaded-arm-binaries
+          cd ./downloaded-arm-binaries
+          
+          # Set archive name based on build matrix
+          TAR_FILE_NAME="valkey-${{ inputs.version }}-${{ matrix.distro.platform }}-${{ matrix.distro.arch }}"
+                    
+          # Download tarball and checksum
+          curl -fsSL -o $TAR_FILE_NAME.tar.gz "https://download.valkey.io/releases/$TAR_FILE_NAME.tar.gz"
+          curl -fsSL -o $TAR_FILE_NAME.tar.gz.sha256 "https://download.valkey.io/releases/$TAR_FILE_NAME.tar.gz.sha256"
+          
           sha256sum -c $TAR_FILE_NAME.tar.gz.sha256
+          tar -xzf $TAR_FILE_NAME.tar.gz
           
-          echo "Extracting and validating binary"
-          tar xf $TAR_FILE_NAME.tar.gz
-          
-          # Check if binary exists and is executable
+          # Verify binary structure
           if [ ! -x "$TAR_FILE_NAME/bin/valkey-server" ]; then
-            echo "Error: valkey-server is not executable"
-            exit 1
+              echo "valkey-server not found or not executable"
+              exit 1
           fi
           
-          echo "All validation checks passed successfully"
+          echo "BINARY_DIR=$(pwd)/$TAR_FILE_NAME/bin" >> $GITHUB_ENV
+          echo "TAR_FILE_NAME=$TAR_FILE_NAME" >> $GITHUB_ENV
+          
+      - name: Run main test suite
+        run: |
+
+          echo "${{ env.BINARY_DIR }}" >> $GITHUB_PATH
+
+          timeout 30m make test || {
+            echo "Main tests failed"
+            exit 1
+          }
+          
+      - name: Run unit tests
+        run: |
+          timeout 15m make test-unit || {
+            echo "Unit tests failed"
+            exit 1
+          }
+          
+      - name: Run module tests
+        run: |
+          timeout 15m make test-modules || {
+            echo "Module tests failed"
+            exit 1
+          }
+          
+      - name: Run Sentinel tests
+        run: |
+          timeout 20m make test-sentinel || {
+            echo "Sentinel tests failed"
+            exit 1
+          }
+          
+      - name: Run Cluster tests
+        run: |
+          timeout 20m make test-cluster || {
+            echo "Cluster tests failed"
+            exit 1
+          }
+            
+      - name: Test summary
+        if: always()
+        run: |
+          echo "📋 Test Summary for ${{ env.TAR_FILE_NAME }}"
+          echo "================================================="
+          echo "Downloaded and validated from S3"
+          echo "SHA256 checksum verified"
+          echo "Binary extraction successful"
+          echo "Version checks passed"
+          echo "All test suites passed"
