@@ -121,22 +121,74 @@ jobs:
           
           # Set archive name based on build matrix
           TAR_FILE_NAME="valkey-${{ inputs.version }}-${{ matrix.distro.platform }}-${{ matrix.distro.arch }}"
-                    
-          # Download tarball and checksum
-          curl -fsSL -o $TAR_FILE_NAME.tar.gz "https://download.valkey.io/releases/$TAR_FILE_NAME.tar.gz"
-          curl -fsSL -o $TAR_FILE_NAME.tar.gz.sha256 "https://download.valkey.io/releases/$TAR_FILE_NAME.tar.gz.sha256"
+          echo "Looking for: $TAR_FILE_NAME.tar.gz"
+          echo "Public URL: https://download.valkey.io/releases/$TAR_FILE_NAME.tar.gz"
           
+          # Retry download with backoff (CDN propagation can take time)
+          echo "Downloading tarball with retry logic..."
+          for i in {1..10}; do
+            echo "Download attempt $i/10"
+            
+            if curl -fsSL -o $TAR_FILE_NAME.tar.gz "https://download.valkey.io/releases/$TAR_FILE_NAME.tar.gz"; then
+              echo "✅ Successfully downloaded tarball"
+              break
+            else
+              echo "❌ Download failed (attempt $i/10)"
+              if [ $i -eq 10 ]; then
+                echo "All download attempts failed after 10 tries"
+                exit 1
+              fi
+              echo "Waiting 30 seconds for CDN propagation..."
+              sleep 30
+            fi
+          done
+          
+          # Download checksum with retry
+          echo "Downloading checksum file..."
+          for i in {1..5}; do
+            echo "Checksum download attempt $i/5"
+            if curl -fsSL -o $TAR_FILE_NAME.tar.gz.sha256 "https://download.valkey.io/releases/$TAR_FILE_NAME.tar.gz.sha256"; then
+              echo "✅ Successfully downloaded checksum"
+              break
+            else
+              echo "❌ Checksum download failed (attempt $i/5)"
+              if [ $i -eq 5 ]; then
+                echo "All checksum download attempts failed"
+                exit 1
+              fi
+              echo "Waiting 15 seconds before retry..."
+              sleep 15
+            fi
+          done
+          
+          # Verify checksum
+          echo "Verifying SHA256 checksum..."
           sha256sum -c $TAR_FILE_NAME.tar.gz.sha256
+          
+          # Extract tarball
+          echo "Extracting tarball..."
           tar -xzf $TAR_FILE_NAME.tar.gz
           
           # Verify binary structure
           if [ ! -x "$TAR_FILE_NAME/bin/valkey-server" ]; then
-              echo "valkey-server not found or not executable"
+              echo "❌ valkey-server not found or not executable"
               exit 1
           fi
           
+          echo "✅ Binary validation successful"
           echo "BINARY_DIR=$(pwd)/$TAR_FILE_NAME/bin" >> $GITHUB_ENV
           echo "TAR_FILE_NAME=$TAR_FILE_NAME" >> $GITHUB_ENV
+          
+      - name: Add binaries to PATH
+        run: |
+          echo "${{ env.BINARY_DIR }}" >> $GITHUB_PATH
+          echo "Added ${{ env.BINARY_DIR }} to PATH"
+          
+      - name: Verify binaries are accessible
+        run: |
+          echo "Verifying binaries are in PATH..."
+          which valkey-server
+          valkey-server --version
           
       - name: Run main test suite
         run: |
