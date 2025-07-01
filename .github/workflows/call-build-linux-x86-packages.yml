@@ -104,15 +104,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
-            tcl \
-            tcl-dev \
-            tcl-tls \
-            python3 \
-            python3-pip \
-            libssl-dev \
-            bc \
-            curl
+          build-essential \
+          tcl \
+          tcl-tls \
+          python3 \
+          libssl-dev \
+          bc \
+          curl
           
       - name: Download and validate the binaries from the S3 buckets
         run: |
@@ -135,6 +133,16 @@ jobs:
           fi
           
           echo "$(pwd)/$TAR_FILE_NAME/bin" >> $GITHUB_PATH
+
+      - name: Create symlinks for test suite
+        run: |
+          mkdir -p src
+          ln -sf $(which valkey-server) src/valkey-server
+          ln -sf $(which valkey-cli) src/valkey-cli
+          ln -sf $(which valkey-benchmark) src/valkey-benchmark
+          ln -sf $(which valkey-sentinel) src/valkey-sentinel
+          ln -sf $(which valkey-check-aof) src/valkey-check-aof
+          ln -sf $(which valkey-check-rdb) src/valkey-check-rdb
 
       - name: Run main Valkey test suite
         run: ./runtest --verbose --tags -slow --dump-logs
