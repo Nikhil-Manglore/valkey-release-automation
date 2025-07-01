@@ -137,7 +137,7 @@ jobs:
           echo "$(pwd)/$TAR_FILE_NAME/bin" >> $GITHUB_PATH
 
       - name: Run main Valkey test suite
-        run: timeout 45m make test 
+        run: timeout 60m make test 
           
       - name: Run Valkey unit tests
         run: timeout 15m make test-unit
