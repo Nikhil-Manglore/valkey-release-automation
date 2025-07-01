@@ -137,16 +137,16 @@ jobs:
           echo "$(pwd)/$TAR_FILE_NAME/bin" >> $GITHUB_PATH
 
       - name: Run main Valkey test suite
-        run: timeout 60m make test 
+        run: ./runtest --verbose --tags -slow --dump-logs
           
       - name: Run Valkey unit tests
         run: timeout 15m make test-unit
 
       - name: Run Valkey Cluster tests
-        run: timeout 15m make test-cluster 
-          
-      - name: Run Valkey Sentinel tests
-        run: timeout 15m make test-sentinel 
+        run: ./runtest-cluster --verbose --dump-logs
+
+      - name: Run Valkey Sentinel tests  
+        run: ./runtest-sentinel --verbose --dump-logs
 
       - name: Run Valkey module tests
-        run: timeout 15m make test-modules   
+        run: ./runtest-moduleapi --verbose --dump-logs
