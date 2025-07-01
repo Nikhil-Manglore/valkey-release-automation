@@ -134,27 +134,14 @@ jobs:
           
           echo "$(pwd)/$TAR_FILE_NAME/bin" >> $GITHUB_PATH
 
-      - name: Create symlinks for test suite
-        run: |
-          mkdir -p src
-          ln -sf $(which valkey-server) src/valkey-server
-          ln -sf $(which valkey-cli) src/valkey-cli
-          ln -sf $(which valkey-benchmark) src/valkey-benchmark
-          ln -sf $(which valkey-sentinel) src/valkey-sentinel
-          ln -sf $(which valkey-check-aof) src/valkey-check-aof
-          ln -sf $(which valkey-check-rdb) src/valkey-check-rdb
-
       - name: Run main Valkey test suite
-        run: ./runtest --verbose --tags -slow --dump-logs
-          
-      - name: Run Valkey unit tests
-        run: timeout 15m make test-unit
+        run: timeout 60m make test
 
       - name: Run Valkey Cluster tests
-        run: ./runtest-cluster --verbose --dump-logs
+        run: timeout 20m make test-cluster
 
       - name: Run Valkey Sentinel tests  
-        run: ./runtest-sentinel --verbose --dump-logs
+        run: timeout 20m make test-sentinel
 
       - name: Run Valkey module tests
-        run: ./runtest-moduleapi --verbose --dump-logs
+        run: timeout 15m make test-modules
