@@ -37,9 +37,9 @@ jobs:
       matrix: ${{ fromJSON(inputs.build_matrix) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
-          repository: valkey-io/valkey
+          repository: ${{ github.repository_owner }}/valkey
           ref: ${{ inputs.version }}
 
       - name: Configure AWS credentials
@@ -87,7 +87,7 @@ jobs:
         run: aws s3 sync packages-files s3://${{ secrets.bucket_name }}/releases/
 
   test-binaries:
-    name: Test S3 binaries ${{ matrix.distro.platform }}-${{ matrix.distro.arch }}
+    name: Test the binaries that were uploaded to S3 - ${{ matrix.distro.platform }}-${{ matrix.distro.arch }}
     runs-on: ${{ matrix.distro.target }}
     needs: build-valkey
     strategy:
@@ -95,12 +95,12 @@ jobs:
       matrix: ${{ fromJSON(inputs.build_matrix) }}
     steps:
       - name: Checkout Valkey
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
-          repository: valkey-io/valkey
-          ref: unstable
+          repository: ${{ github.repository_owner }}/valkey
+          ref: ${{ inputs.version }}
           
-      - name: Install test dependencies
+      - name: Install all dependencies required for testing
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -114,127 +114,39 @@ jobs:
             bc \
             curl
           
-      - name: Download and validate binaries from S3
+      - name: Download and validate the binaries from the S3 buckets
         run: |
           mkdir -p ./downloaded-arm-binaries
           cd ./downloaded-arm-binaries
           
-          # Set archive name based on build matrix
           TAR_FILE_NAME="valkey-${{ inputs.version }}-${{ matrix.distro.platform }}-${{ matrix.distro.arch }}"
-          echo "Looking for: $TAR_FILE_NAME.tar.gz"
-          echo "Public URL: https://download.valkey.io/releases/$TAR_FILE_NAME.tar.gz"
+
+          sleep 30
           
-          # Retry download with backoff (CDN propagation can take time)
-          echo "Downloading tarball with retry logic..."
-          for i in {1..10}; do
-            echo "Download attempt $i/10"
-            
-            if curl -fsSL -o $TAR_FILE_NAME.tar.gz "https://download.valkey.io/releases/$TAR_FILE_NAME.tar.gz"; then
-              echo "✅ Successfully downloaded tarball"
-              break
-            else
-              echo "❌ Download failed (attempt $i/10)"
-              if [ $i -eq 10 ]; then
-                echo "All download attempts failed after 10 tries"
-                exit 1
-              fi
-              echo "Waiting 30 seconds for CDN propagation..."
-              sleep 30
-            fi
-          done
+          curl -fsSL -o $TAR_FILE_NAME.tar.gz "https://download.valkey.io/releases/$TAR_FILE_NAME.tar.gz"
+          curl -fsSL -o $TAR_FILE_NAME.tar.gz.sha256 "https://download.valkey.io/releases/$TAR_FILE_NAME.tar.gz.sha256"
           
-          # Download checksum with retry
-          echo "Downloading checksum file..."
-          for i in {1..5}; do
-            echo "Checksum download attempt $i/5"
-            if curl -fsSL -o $TAR_FILE_NAME.tar.gz.sha256 "https://download.valkey.io/releases/$TAR_FILE_NAME.tar.gz.sha256"; then
-              echo "✅ Successfully downloaded checksum"
-              break
-            else
-              echo "❌ Checksum download failed (attempt $i/5)"
-              if [ $i -eq 5 ]; then
-                echo "All checksum download attempts failed"
-                exit 1
-              fi
-              echo "Waiting 15 seconds before retry..."
-              sleep 15
-            fi
-          done
-          
-          # Verify checksum
-          echo "Verifying SHA256 checksum..."
           sha256sum -c $TAR_FILE_NAME.tar.gz.sha256
-          
-          # Extract tarball
-          echo "Extracting tarball..."
           tar -xzf $TAR_FILE_NAME.tar.gz
           
-          # Verify binary structure
           if [ ! -x "$TAR_FILE_NAME/bin/valkey-server" ]; then
-              echo "❌ valkey-server not found or not executable"
+              echo "valkey-server not found or not executable"
               exit 1
           fi
           
-          echo "✅ Binary validation successful"
-          echo "BINARY_DIR=$(pwd)/$TAR_FILE_NAME/bin" >> $GITHUB_ENV
-          echo "TAR_FILE_NAME=$TAR_FILE_NAME" >> $GITHUB_ENV
-          
-      - name: Add binaries to PATH
-        run: |
-          echo "${{ env.BINARY_DIR }}" >> $GITHUB_PATH
-          echo "Added ${{ env.BINARY_DIR }} to PATH"
-          
-      - name: Verify binaries are accessible
-        run: |
-          echo "Verifying binaries are in PATH..."
-          which valkey-server
-          valkey-server --version
-          
-      - name: Run main test suite
-        run: |
+          echo "$(pwd)/$TAR_FILE_NAME/bin" >> $GITHUB_PATH
 
-          echo "${{ env.BINARY_DIR }}" >> $GITHUB_PATH
+      - name: Run main Valkey test suite
+        run: timeout 30m make test 
+          
+      - name: Run Valkey unit tests
+        run: timeout 15m make test-unit
 
-          timeout 30m make test || {
-            echo "Main tests failed"
-            exit 1
-          }
+      - name: Run Valkey Cluster tests
+        run: timeout 15m make test-cluster 
           
-      - name: Run unit tests
-        run: |
-          timeout 15m make test-unit || {
-            echo "Unit tests failed"
-            exit 1
-          }
-          
-      - name: Run module tests
-        run: |
-          timeout 15m make test-modules || {
-            echo "Module tests failed"
-            exit 1
-          }
-          
-      - name: Run Sentinel tests
-        run: |
-          timeout 20m make test-sentinel || {
-            echo "Sentinel tests failed"
-            exit 1
-          }
-          
-      - name: Run Cluster tests
-        run: |
-          timeout 20m make test-cluster || {
-            echo "Cluster tests failed"
-            exit 1
-          }
-            
-      - name: Test summary
-        if: always()
-        run: |
-          echo "📋 Test Summary for ${{ env.TAR_FILE_NAME }}"
-          echo "================================================="
-          echo "Downloaded and validated from S3"
-          echo "SHA256 checksum verified"
-          echo "Binary extraction successful"
-          echo "Version checks passed"
-          echo "All test suites passed"
+      - name: Run Valkey Sentinel tests
+        run: timeout 15m make test-sentinel 
+
+      - name: Run Valkey module tests
+        run: timeout 15m make test-modules 
