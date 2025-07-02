@@ -37,7 +37,7 @@ jobs:
       matrix: ${{ fromJSON(inputs.build_matrix) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: ${{ github.repository_owner }}/valkey
           ref: ${{ inputs.version }}
@@ -95,7 +95,7 @@ jobs:
       matrix: ${{ fromJSON(inputs.build_matrix) }}
     steps:
       - name: Checkout Valkey
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: ${{ github.repository_owner }}/valkey
           ref: ${{ inputs.version }}
@@ -144,4 +144,4 @@ jobs:
         run: timeout 20m make test-sentinel
 
       - name: Run Valkey module tests
-        run: timeout 15m make test-modules
+        run: timeout 20m make test-modules
