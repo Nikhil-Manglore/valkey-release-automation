@@ -49,10 +49,10 @@ jobs:
         run: |
           VERSION="${{ inputs.version }}"
           if [[ "$VERSION" == *"-rc"* ]]; then
-            # For RC versions, remove the RC part
-            VERSION_BASE=${VERSION%-rc*}
-            VERSION_DASHED=${VERSION_BASE//./-}
+            # For RC versions, keep the full version with RC: v9-0-0-rc2.md
+            VERSION_DASHED=${VERSION//./-}
           else
+            # GA gets clean version: v9-0-0.md
             VERSION_DASHED=${VERSION//./-}
           fi
           echo "version_dashed=$VERSION_DASHED" >> $GITHUB_OUTPUT
