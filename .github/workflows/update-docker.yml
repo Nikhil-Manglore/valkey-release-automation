@@ -95,25 +95,6 @@ jobs:
               echo "has_changes=false" >> $GITHUB_OUTPUT
             fi
 
-      - name: Update container aliases
-        id: alias-update
-        run: |
-          cd valkey-container
-          python ../valkey-release-automation/scripts/automate_alias_update.py \
-            generate-stackbrew-library.sh \
-            ${{ inputs.version }}
-          
-          git add generate-stackbrew-library.sh
-          
-          # Only commit if there are changes
-          if ! git diff --cached --quiet; then
-            git commit -m "Update container aliases for version ${{ inputs.version }}" -s
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-          else
-            echo "No changes to commit for aliases - PR will not be created."
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Generate bashbrew output
         id: generate-bashbrew
         run: |
