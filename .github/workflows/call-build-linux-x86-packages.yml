@@ -67,7 +67,7 @@ jobs:
           fi
 
       - name: Run Valkey test suite
-        run: timeout 60m make test
+        run: timeout 60m ./runtest
       
       - name: Create Tarball and SHA256sums
         run: |
