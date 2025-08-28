@@ -53,6 +53,7 @@ jobs:
           echo "Building for version: $VERSION"
 
           make -C deps
+          make deps BUILD_TLS=yes
 
           if [[ "$VERSION" != "unstable" ]]; then
             MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
